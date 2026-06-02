@@ -249,6 +249,15 @@ pub(crate) fn spawn_installed_desktop(install_root: &std::path::Path) -> std::io
     })?;
     let mut cmd = std::process::Command::new(&exe);
     cmd.current_dir(exe.parent().unwrap_or(install_root));
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        // DETACHED_PROCESS = 0x00000008 — keep the desktop alive after the
+        // installer exits, mirroring launch_hermes_desktop. Kept correct here
+        // even though the only caller is macOS-gated today, so future reuse on
+        // Windows doesn't reintroduce the relaunch race.
+        cmd.creation_flags(0x0000_0008);
+    }
     cmd.spawn().map(|_child| ())
 }
 

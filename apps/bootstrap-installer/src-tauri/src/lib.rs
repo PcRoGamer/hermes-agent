@@ -85,7 +85,13 @@ pub fn run() {
     let _guard = paths::init_logging();
 
     let mode = AppMode::from_args(std::env::args().skip(1));
-    tracing::info!(?mode, "Hermes Setup starting");
+    // Escape hatch: `--reinstall`/`--repair` forces the installer UI even when
+    // Hermes is already installed, so users can re-run setup to repair a broken
+    // install instead of the launcher fast path silently relaunching the app.
+    let force_setup = std::env::args()
+        .skip(1)
+        .any(|a| a == "--reinstall" || a == "--repair");
+    tracing::info!(?mode, force_setup, "Hermes Setup starting");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -108,7 +114,10 @@ pub fn run() {
             // reliable detached relaunch there needs the DETACHED_PROCESS +
             // startup-grace handling used by launch_hermes_desktop — out of
             // scope here). So this is a pure no-op on non-macOS.
-            if cfg!(target_os = "macos") && mode == AppMode::Install {
+            //
+            // `--reinstall`/`--repair` opts out so a broken install can be
+            // repaired by re-running setup instead of launching the bad app.
+            if cfg!(target_os = "macos") && mode == AppMode::Install && !force_setup {
                 let install_root = paths::hermes_home().join("hermes-agent");
                 if bootstrap::hermes_is_installed(&install_root) {
                     match bootstrap::spawn_installed_desktop(&install_root) {
