@@ -1,0 +1,49 @@
+name: sync-desktop-upstream
+
+on:
+  schedule:
+    - cron: "0 6 * * *"   # daily at 06:00 UTC
+  workflow_dispatch:       # manual trigger from the Actions tab
+
+permissions:
+  contents: write          # needed to push the filtered result
+
+jobs:
+  filter-and-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout desktop-only branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install git-filter-repo
+        run: |
+          pip install --quiet git-filter-repo
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream NousResearch/hermes-agent
+        run: |
+          git remote add upstream https://github.com/NousResearch/hermes-agent.git
+          git fetch upstream
+
+      - name: Filter upstream/main to desktop + shared
+        run: |
+          git checkout upstream/main
+          git checkout -b desktop-next
+          git filter-repo --path apps/desktop --path apps/shared --force
+
+      - name: Fast-forward main
+        run: |
+          git checkout main
+          git merge --ff-only desktop-next
+          git branch -d desktop-next
+
+      - name: Push updated desktop-only main
+        run: |
+          git push origin main
